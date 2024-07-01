@@ -4,7 +4,8 @@ package com.api.thuctaptotnghiepbackend.Paypal;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -21,6 +22,9 @@ import com.paypal.api.payments.Payer;
 import com.paypal.api.payments.Payment;
 import com.paypal.api.payments.PaymentExecution;
 import com.paypal.api.payments.RedirectUrls;
+import com.paypal.api.payments.Refund;
+import com.paypal.api.payments.RelatedResources;
+import com.paypal.api.payments.Sale;
 import com.paypal.api.payments.Transaction;
 import com.paypal.base.rest.APIContext;
 import com.paypal.base.rest.PayPalRESTException;
@@ -30,6 +34,9 @@ import com.paypal.base.rest.PayPalRESTException;
 @Service
 public class PaypalService {
 	
+
+    @Autowired
+    private paymentInfoRepository paymentInfoRepository;
 	@Autowired
 	private APIContext apiContext;
 	
@@ -58,8 +65,16 @@ public class PaypalService {
             item.setPrice(totalBigDecimal.toString());
             item.setQuantity(payment.getQuantity());
            item.setSku(payment.getProductname());
-            // Thêm item vào danh sách items
-            item.setDescription(payment.getIdUser());
+            // item.setCurrency(payment.getSize());
+            // String color = payment.getColor();
+            // if (color.startsWith("#")) {
+            //     color = color.substring(1); // Loại bỏ ký tự đầu tiên (#)
+            // }
+            // item.setUrl(color);
+           
+            String description = payment.getColor() + " | " + payment.getSize() + " | " + payment.getIdUser();
+            item.setDescription(description);
+            
             items.add(item);
 
 
@@ -115,10 +130,10 @@ ItemList itemList = new ItemList();
         payment.setRedirectUrls(redirectUrls);
         apiContext.setMaskRequestId(true);
 
-        String requestId = apiContext.getRequestId();
-        System.out.println("RequestId for the recent request: " + requestId);
-
+      
+       
         return payment.create(apiContext);
+       
     } 
 
 
@@ -138,6 +153,132 @@ public Payment executePayment(String paymentId, String payerId) throws PayPalRES
 
     return payment.execute(apiContext, paymentExecute);
 }
+
+
+
+public Payment getPaymentDetails(String paymentId) throws PayPalRESTException {
+    return Payment.get(apiContext, paymentId);
+}
+
+public Sale refundSale(String paymentId, BigDecimal refundAmount, String currency) throws PayPalRESTException {
+   
+    Payment payment = getPaymentDetails(paymentId);
+
+   
+    String saleId = extractSaleId(payment);
+
+   
+    Amount refundAmountObj = createRefundAmount(refundAmount, currency);
+
+    updatePaymentInfoStatus(paymentId, "REFUNDED");
+    return executeRefund(saleId, refundAmountObj);
+}
+
+private String extractSaleId(Payment payment) throws PayPalRESTException {
+    if (payment.getTransactions() != null && !payment.getTransactions().isEmpty()) {
+        Transaction transaction = payment.getTransactions().get(0);
+        if (transaction.getRelatedResources() != null && !transaction.getRelatedResources().isEmpty()) {
+            RelatedResources relatedResources = transaction.getRelatedResources().get(0);
+            if (relatedResources.getSale() != null) {
+                return relatedResources.getSale().getId();
+            } else {
+                throw new PayPalRESTException("Sale object not found in RelatedResources.");
+            }
+        } else {
+            throw new PayPalRESTException("RelatedResources list is empty or null.");
+        }
+    } else {
+        throw new PayPalRESTException("No transactions found in the Payment.");
+    }
+}
+
+private Amount createRefundAmount(BigDecimal refundAmount, String currency) {
+    Amount refundAmountObj = new Amount();
+    refundAmountObj.setCurrency(currency);
+    refundAmountObj.setTotal(refundAmount.setScale(2, RoundingMode.HALF_UP).toString());
+    return refundAmountObj;
+}
+
+private Sale executeRefund(String saleId, Amount refundAmount) throws PayPalRESTException {
+    Sale sale = new Sale();
+    sale.setId(saleId);
+    Refund refund = new Refund();
+    refund.setAmount(refundAmount);
+   sale.refund(apiContext, refund);
+
+return sale;
+}
+
+
+public void updatePaymentInfoStatus(String paymentId, String status) {
+    List<PaymentInfo> paymentInfos = paymentInfoRepository.findByPaymentId(paymentId);
+    for (PaymentInfo paymentInfo : paymentInfos) {
+        paymentInfo.setStatus(status);
+        paymentInfoRepository.save(paymentInfo);
+    }
+}
+
+
+
+
+
+private String extractSaleState(Payment payment) throws PayPalRESTException {
+    if (payment.getTransactions() != null && !payment.getTransactions().isEmpty()) {
+        Transaction transaction = payment.getTransactions().get(0);
+        if (transaction.getRelatedResources() != null && !transaction.getRelatedResources().isEmpty()) {
+            RelatedResources relatedResources = transaction.getRelatedResources().get(0);
+            if (relatedResources.getSale() != null) {
+                return relatedResources.getSale().getState();
+            } else {
+                throw new PayPalRESTException("Sale object not found in RelatedResources.");
+            }
+        } else {
+            throw new PayPalRESTException("RelatedResources list is empty or null.");
+        }
+    } else {
+        throw new PayPalRESTException("No transactions found in the Payment.");
+    }
+}
+
+
+public String getSaleState(String paymentId) throws PayPalRESTException {
+    Payment payment = getPaymentDetails(paymentId);
+    return extractSaleState(payment);
+}
+
+public String getPaymentStateDescription(String state) {
+    switch (state) {
+        case "approved":
+            return "Đã thanh toán";
+        case "created":
+            return " Thanh toán đã được tạo nhưng chưa được chấp nhận";
+        case "failed":
+            return "Thanh toán đã thất bại";
+        case "canceled":
+            return "Thanh toán đã bị hủy.";
+        case "expired":
+            return "Thanh toán đã hết hạn";
+        case "pending":
+            return "Thanh toán đang chờ xử lý";
+        case "completed":
+            return " Thanh toán đã hoàn tất";
+        case "denied":
+            return "Thanh toán đã bị từ chối";
+        case "refunded":
+            return "Đã hoàn tiền";
+        case "partially_refunded":
+            return "The payment has been partially refunded.";
+        case "voided":
+            return "Thanh toán đã bị vô hiệu hóa";
+        default:
+            return null;
+    }
+}
+
+
+
+
+   
 
 
 }

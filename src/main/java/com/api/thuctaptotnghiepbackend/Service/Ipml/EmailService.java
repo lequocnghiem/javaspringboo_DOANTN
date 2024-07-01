@@ -51,4 +51,22 @@ public class EmailService {
         }
     }
 
+
+
+
+    public void sendEmail(String from, String to, String subject, String htmlContent) throws MessagingException {
+        MimeMessage mimeMessage = javaMailSender.createMimeMessage();
+        MimeMessageHelper helper = new MimeMessageHelper(mimeMessage, "utf-8");
+        try {
+        helper.setText(htmlContent, true);
+        helper.setTo(to);
+        helper.setSubject(subject);
+      
+        javaMailSender.send(mimeMessage);
+    } catch (MessagingException e) {
+        e.printStackTrace(); // Xử lý lỗi gửi email
+    }
+    }
+
+
 }

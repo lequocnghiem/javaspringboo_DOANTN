@@ -11,6 +11,7 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 
 
 import jakarta.persistence.Entity;
+import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
@@ -35,9 +36,9 @@ public class paypal {
     private Long id;
 
 
-	@ManyToOne
+	@ManyToOne(fetch = FetchType.EAGER)
 	@JoinColumn(name = "payment_id")
-     @JsonIgnore
+    //  @JsonIgnore
 	private PaymentInfo paymentInfo;
 
 
@@ -55,7 +56,10 @@ public class paypal {
 
    
     private String amount;
+    private String color;
+    private String size;
 
+    private String order_code;
     
     private String currency;
 

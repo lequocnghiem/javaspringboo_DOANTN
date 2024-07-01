@@ -111,7 +111,9 @@ public class User implements UserDetails  {
 	}
      
      
-     
+	public User(String username) {
+        this.username = username;
+    }
 @Override
 public Collection<? extends GrantedAuthority> getAuthorities() {
 	if(roles==null){

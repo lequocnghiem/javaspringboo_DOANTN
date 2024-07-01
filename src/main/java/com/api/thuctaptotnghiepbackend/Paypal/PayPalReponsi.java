@@ -10,5 +10,6 @@ import org.springframework.stereotype.Repository;
 @Repository
 public interface PayPalReponsi extends JpaRepository<paypal,Long> {
     List<paypal> findByidUser(String userId);
-    
+    List<paypal> findByPaymentInfo(PaymentInfo paymentInfo);
+    List<paypal> findByPaymentInfoPaymentId(String paymentId);
 }

@@ -12,6 +12,7 @@ import com.api.thuctaptotnghiepbackend.Entity.User;
 public interface UserRepository extends JpaRepository<User, Long> {
        Page<User> findAll(Pageable pageable);
        Optional<User> findByEmail(String email);
-   
+       User findByUsername(String username);
+     
 }
 

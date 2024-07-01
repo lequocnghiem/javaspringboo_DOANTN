@@ -25,7 +25,7 @@ public class JwtService {
                 .withClaim("address", user.getAddress())
                 .withClaim("phone", user.getPhone())
                 .withClaim("userId", user.getId())
-                
+                .withClaim("verified", user.isVerified())
                 .withClaim("roles", authorities.stream().map(GrantedAuthority::getAuthority).collect(Collectors.toList()))
                 .sign(algorithm);
     }

@@ -2,6 +2,8 @@ package com.api.thuctaptotnghiepbackend.Paypal;
 
 
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
 // import java.io.BufferedReader;
 // import java.io.InputStreamReader;
 // import java.io.OutputStream;
@@ -14,6 +16,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+
+import javax.validation.Valid;
 
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.HttpStatus;
@@ -32,12 +36,19 @@ import org.springframework.web.servlet.ModelAndView;
 
 import com.api.thuctaptotnghiepbackend.Entity.Productimage;
 import com.api.thuctaptotnghiepbackend.Repository.Product.ProductimageRepository;
+import com.api.thuctaptotnghiepbackend.Request.RefundRequest;
 import com.api.thuctaptotnghiepbackend.Responses.ResourceNotFoundException;
+import com.api.thuctaptotnghiepbackend.Service.UserService;
+import com.api.thuctaptotnghiepbackend.Service.Ipml.EmailService;
+import com.api.thuctaptotnghiepbackend.Template.EmailTemplate;
 import com.paypal.api.payments.Item;
 import com.paypal.api.payments.Links;
 import com.paypal.api.payments.Payment;
+import com.paypal.api.payments.Sale;
 import com.paypal.api.payments.Transaction;
 import com.paypal.base.rest.PayPalRESTException;
+
+import jakarta.mail.MessagingException;
 @CrossOrigin(origins = "*")
 @RestController
 
@@ -56,6 +67,23 @@ public class PaypalResource {
     @Autowired
     private  ProductimageRepository  productimageRepository;
 
+
+ private final EmailService emailService;
+ private final UserService userService;
+ private final EmailTemplate emailTemplate;
+
+ @Autowired
+    public PaypalResource(EmailService emailService, UserService userService,EmailTemplate emailTemplate) {
+        this.emailService = emailService;
+        this.userService = userService;
+        this.emailTemplate = emailTemplate;
+    }
+
+
+   
+
+   
+
 //hamf add 
 @PostMapping("/add")
 public ResponseEntity<?> createPayment( @RequestBody List<Payments> Payments) {
@@ -63,11 +91,11 @@ public ResponseEntity<?> createPayment( @RequestBody List<Payments> Payments) {
         Payment payment = paypalService.createPayment(Payments, "http://localhost:9011/api/cancel", "http://localhost:9011/api/success/pay");
 
         System.out.println("Phản hồi thanh toán: " + payment.toJSON());
-
+      
         for (Links link : payment.getLinks()) {
             if (link.getRel().equals("approval_url")) {
                 Map<String, Object> data = new HashMap<>();
-                data.put("id", UUID.randomUUID().toString()); // Tạo ID mới cho mỗi thanh toán
+                data.put("id", UUID.randomUUID().toString());
                 data.put("approvalUrl", link.getHref());
                 return ResponseEntity.ok(data);
             }
@@ -111,6 +139,10 @@ public ResponseEntity<?> createPayment( @RequestBody List<Payments> Payments) {
                 savePaymentToDatabase(payment);
                 modelAndView.setViewName("pay");
                 modelAndView.addObject("paymentId", paymentId);
+
+
+
+
                 return modelAndView;
             }
         } catch (PayPalRESTException e) {
@@ -135,26 +167,85 @@ public ResponseEntity<?> createPayment( @RequestBody List<Payments> Payments) {
         paymentInfoEntity.setPaymentTime(new Date()); // Thời gian thanh toán
     
         PaymentInfo savedPaymentInfo = paymentInfoRepository.save(paymentInfoEntity);
-    
+        List<String> productList = new ArrayList<>();
+
+
         // Lấy thông tin chi tiết thanh toán từ đối tượng Payment và lưu vào cơ sở dữ liệu
         for (Transaction transaction : payment.getTransactions()) {
             for (Item item : transaction.getItemList().getItems()) {
                 paypal paymentEntity = new paypal();
                 paymentEntity.setPaymentInfo(savedPaymentInfo);
                 paymentEntity.setProductId(item.getName());
-                paymentEntity.setIdUser(item.getDescription());
+                String description = item.getDescription();
+                if (description != null) {
+                    String[] parts = description.split(" \\| ");
+                    if (parts.length == 3) {
+                        paymentEntity.setColor(parts[0]);
+                        paymentEntity.setSize(parts[1]);
+                        paymentEntity.setIdUser(parts[2]);
+                    }
+                    // Nếu không phù hợp định dạng, parts.length != 2, không làm gì cả
+                }
                 paymentEntity.setQuantity(item.getQuantity());
                 paymentEntity.setAmount(item.getPrice());
                 paymentEntity.setCurrency(item.getCurrency());
                 paymentEntity.setProductname(item.getSku());
+                // paymentEntity.setSize(item.getUrl());
+                String productInfo = String.format("productId: %s, name: %s, Size: %s, Color: %s, Quantity: %s, Price: %s %s",
+                    item.getName(), item.getSku(), paymentEntity.getSize(), paymentEntity.getColor(),
+                    item.getQuantity(), item.getPrice(), item.getCurrency());
+productList.add(productInfo);
+
                 payPalReponsi.save(paymentEntity);
             }
         }
+
+        String userIdStr  = payment.getTransactions().get(0).getDescription(); // Assuming this is the user ID from payment
+        long userId;
+
+    userId = Long.parseLong(userIdStr);
+
+    String userEmail = userService.getEmailByUserId(userId);
+    
+    String emailContent = emailTemplate.getPaymentSuccessEmail(payment.getId(), productList);
+
+    try {
+        emailService.sendEmail(userEmail, "Thanh toán đơn hàng thành công", emailContent);
+    } catch (Exception  e) {
+        // Handle email sending exception
+        e.printStackTrace();
+    }
     
 }
 
-
+@GetMapping("/statussale/{paymentId}")
+public ResponseEntity<?> getPaymentStatus(@PathVariable String paymentId) {
+    try {
+        String saleState = paypalService.getSaleState(paymentId);
+        String stateDescription = paypalService.getPaymentStateDescription(saleState);
+        return ResponseEntity.ok(stateDescription);
+    } catch (PayPalRESTException e) {
+        return ResponseEntity.status(500).body("Error: " + e.getMessage());
+    }
+}
    
+
+
+@GetMapping("/getPaypalByPaymentId/{paymentId}")
+public List<paypal> getPaypalByPaymentId(@PathVariable String paymentId) {
+    return payPalReponsi.findByPaymentInfoPaymentId(paymentId);
+}
+
+
+ @PostMapping("/refund")
+    public ResponseEntity<?> refundSale( @RequestBody RefundRequest refundRequest) {
+        try {
+            Sale sale = paypalService.refundSale(refundRequest.getPaymentId(), refundRequest.getRefundAmount(), refundRequest.getCurrency());
+            return ResponseEntity.ok("Refund processed successfully");
+        } catch (PayPalRESTException e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Failed to process refund: " + e.getMessage());
+        }
+    }
    
 
     @GetMapping("/order")
@@ -170,10 +261,16 @@ public ResponseEntity<?> createPayment( @RequestBody List<Payments> Payments) {
 
 
     
-    @GetMapping("/getPaypalByproductId/{productId}")
-    public List<Productimage> getPaypalByproductId(@PathVariable Long productId) {
-        return productimageRepository.findByProductIdAndIsPrimary(productId,true);
+  @GetMapping("/getPaypalByproductIds")
+public List<List<Productimage>> getPaypalByproductIds(@RequestParam List<Long> productIds) {
+    List<List<Productimage>> result = new ArrayList<>();
+    for (Long productId : productIds) {
+        List<Productimage> images = productimageRepository.findByProductIdAndIsPrimary(productId, true);
+        result.add(images);
     }
+    return result;
+}
+
 
 
      @DeleteMapping("/{id}")

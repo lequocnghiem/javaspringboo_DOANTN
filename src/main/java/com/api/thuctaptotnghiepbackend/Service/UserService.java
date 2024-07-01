@@ -24,5 +24,6 @@ public interface UserService {
      Role getRoleById(Long id);
     Role updateRole(Long id, Role roleDetails);
     void deleteRole(Long id);
+   String getEmailByUserId(Long userId);
 }
 

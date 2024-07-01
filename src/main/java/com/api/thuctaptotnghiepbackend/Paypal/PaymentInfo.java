@@ -65,7 +65,10 @@ public class PaymentInfo {
   @Column(name = "status")
      private String status ;
 
+     private String order_code;
 
+
+     
      @OneToMany(mappedBy = "paymentInfo", cascade = CascadeType.ALL, orphanRemoval = true)
       @JsonIgnore
      private List<paypal> paypalList;

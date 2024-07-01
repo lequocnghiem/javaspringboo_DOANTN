@@ -211,8 +211,11 @@ public class UserServiceImpl implements UserService {
         userRepository.deleteById(userId);
     }
 
-
-
+    @Override
+    public String getEmailByUserId(Long userId) {
+        User user = userRepository.findById(userId).orElseThrow(() -> new RuntimeException("User not found"));
+        return user.getEmail();
+    }
     
 
 

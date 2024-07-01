@@ -106,6 +106,7 @@ public class ProductServiceImpl implements ProductService {
         List<Product> searchResults = productList.stream()
                 .filter(product ->
                         product.getName().toLowerCase().contains(searchKeyLower) ||
+                        product.getDescription().toLowerCase().contains(searchKeyLower) ||
                         product.getMetakey().toLowerCase().contains(searchKeyLower) ||
                         product.getMetadesc().toLowerCase().contains(searchKeyLower)||
                         product.getBrand().getName().toLowerCase().contains(searchKeyLower)||

@@ -8,6 +8,7 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -18,11 +19,13 @@ import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.api.thuctaptotnghiepbackend.Entity.Product;
 import com.api.thuctaptotnghiepbackend.Entity.Productimage;
+import com.api.thuctaptotnghiepbackend.Repository.Product.ProductimageRepository;
 import com.api.thuctaptotnghiepbackend.Service.ProducimageService;
 
 import lombok.AllArgsConstructor;
@@ -35,20 +38,21 @@ import lombok.AllArgsConstructor;
 @CrossOrigin(origins = "*", exposedHeaders = "Content-Range")
 public class ProductImageController {
      private ProducimageService producimageService;
+     private ProductimageRepository productimageRepository;
 
-     @PostMapping
-     public ResponseEntity<List<Productimage>> uploadImages(@RequestBody List<Productimage> productImages) {
-       
+        @PostMapping
+        public ResponseEntity<List<Productimage>> uploadImages(@RequestBody List<Productimage> productImages) {
+        
 
-        for (Productimage productImage : productImages) {
-            productImage.setId(null);
-        }
-             List<Productimage> savedProducts = producimageService.createProductImages(productImages);
-             return new ResponseEntity<>(savedProducts, HttpStatus.CREATED);
-       
+            for (Productimage productImage : productImages) {
+                productImage.setId(null);
+            }
+                List<Productimage> savedProducts = producimageService.createProductImages(productImages);
+                return new ResponseEntity<>(savedProducts, HttpStatus.CREATED);
+        
+                
             
-         
-     }
+        }
      
      
 
@@ -96,6 +100,17 @@ public class ProductImageController {
         }
         return new ResponseEntity<>(productImages, HttpStatus.OK);
     }
+
+
+    @GetMapping(value = "/{imageId}", produces = MediaType.IMAGE_JPEG_VALUE)
+    public @ResponseBody byte[] getImage(@PathVariable Long imageId) {
+        Productimage productImage = productimageRepository.findById(imageId).orElse(null);
+        if (productImage != null) {
+            return productImage.getImageData();
+        }
+        return null;
+    }
+    
 
 }
 

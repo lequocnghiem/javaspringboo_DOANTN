@@ -32,10 +32,13 @@ public class Payments {
     private String method;
     private String quantity;
     private String intent;
+    private String color;
+    private String size;
     private String description;
     private Date paymentTime;
     private String status;
+    private String shippingStatus;
 
-    // Các hàm tạo, getter, setter và các phương thức khác cần thiết.
+   
 }
 
